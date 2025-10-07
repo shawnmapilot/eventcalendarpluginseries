@@ -216,22 +216,143 @@ add_shortcode('mmec_event_form', function(){
     // Simple form
     $val = fn($k) => isset($_POST[$k]) ? esc_attr($_POST[$k]) : '';
 
-    $out .= '<form method="post">';
-    $out .= wp_nonce_field('mmec_front_add_event', 'mmec_front_nonce', true, false);
-    $out .= '<input type="hidden" name="mmec_front_submit" value="1" />';
-    $out .= '<p><label>Title<br><input type="text" name="title" value="'. $val('title') .'" required></label></p>';
-    $out .= '<p><label>Description<br><textarea name="description" rows="5">'. $val('description') .'</textarea></label></p>';
-    $out .= '<p><label>Start Date & Time<br><input type="datetime-local" name="starts_at" value="'. $val('starts_at') .'" required></label></p>';
-    $out .= '<p><label>End Date & Time<br><input type="datetime-local" name="ends_at" value="'. $val('ends_at') .'"></label></p>';
-    $out .= '<p><label>Location<br><input type="text" name="location" value="'. $val('location') .'"></label></p>';
-    $out .= '<p><button type="submit">Submit Event</button></p>';
-    $out .= '</form>';
+    $out .= '<form class="mmec-form" method="post" action="' . esc_url(get_permalink()) . '">';
+$out .= wp_nonce_field('mmec_front_add_event', '_mmec_nonce', true, false);
+$out .= '<input type="hidden" name="mmec_front_submit" value="1" />';
 
+$out .= '<div class="mmec-row">
+            <label for="mmec_title">'. esc_html__('Title','mm-events-calendar') .'</label>
+            <input id="mmec_title" name="title" type="text" value="'. $val('title') .'" required>
+        </div>';
+
+$out .= '<div class="mmec-row">
+            <label for="mmec_description">'. esc_html__('Description','mm-events-calendar') .'</label>
+            <textarea id="mmec_description" name="description" rows="5">'. $val('description') .'</textarea>
+        </div>';
+
+$out .= '<div class="mmec-row">
+            <label for="mmec_starts">'. esc_html__('Start Date & Time','mm-events-calendar') .'</label>
+            <input id="mmec_starts" name="starts_at" type="datetime-local" value="'. $val('starts_at') .'" required>
+        </div>';
+
+$out .= '<div class="mmec-row">
+            <label for="mmec_ends">'. esc_html__('End Date & Time','mm-events-calendar') .'</label>
+            <input id="mmec_ends" name="ends_at" type="datetime-local" value="'. $val('ends_at') .'">
+        </div>';
+
+$out .= '<div class="mmec-row">
+            <label for="mmec_location">'. esc_html__('Location','mm-events-calendar') .'</label>
+            <input id="mmec_location" name="location" type="text" value="'. $val('location') .'">
+        </div>';
+
+$out .= '<div class="mmec-actions"><button type="submit">'. esc_html__('Submit Event','mm-events-calendar') .'</button></div>';
+$out .= '</form>';
     return $out;
     
 
 });
 
+function mmec_default_options(): array {
+    return [
+        'max_width'        => '640px',
+        'border_radius'    => '8px',
+        'label_color'      => '#111827',
+        'input_border'     => '#cbd5e1',
+        'button_bg'        => '#2271b1',
+        'button_text'      => '#ffffff',
+        'notice_success_bg'=> '#ecfdf5',
+        'notice_error_bg'  => '#fef2f2',
+    ];
+}
+
+function mmec_get_options(): array {
+    $opts = get_option('mmec_form_styles', []);
+    return array_merge(mmec_default_options(), is_array($opts) ? $opts : []);
+}
+
+add_action('admin_menu', function() {
+    add_submenu_page(
+        'mmec_events',
+        __('Form Styles','mm-events-calendar'),
+        __('Form Styles','mm-events-calendar'),
+        'manage_options',
+        'mmec_form_styles',
+        'mmec_render_form_styles_page'
+    );
+});
+
+add_action('admin_init', function() {
+    register_setting('mmec_form_styles_group', 'mmec_form_styles',[
+        'type' => 'array',
+        'sanitize_callback' => function($in){
+            $d = mmec_default_options();
+            $hex = function($v,$fallback){ $v = sanitize_text_field($v ?? ''); return preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/i',$v)?$v:$fallback; };
+            return [
+                'max_width'         => sanitize_text_field($in['max_width'] ?? $d['max_width']),
+                'border_radius'     => sanitize_text_field($in['border_radius'] ?? $d['border_radius']),
+                'label_color'       => $hex($in['label_color'] ?? '', $d['label_color']),
+                'input_border'      => $hex($in['input_border'] ?? '', $d['input_border']),
+                'button_bg'         => $hex($in['button_bg'] ?? '', $d['button_bg']),
+                'button_text'       => $hex($in['button_text'] ?? '', $d['button_text']),
+                'notice_success_bg' => $hex($in['notice_success_bg'] ?? '', $d['notice_success_bg']),
+                'notice_error_bg'   => $hex($in['notice_error_bg'] ?? '', $d['notice_error_bg']),
+            ];
+        },
+        'default' => mmec_default_options(),
+    ]);
+});
+
+function mmec_render_form_styles_page() {
+    if (!current_user_can('manage_options')) return;
+    $o = mmec_get_options();
+    ?>
+    <div class="wrap">
+      <h1><?php _e('MMEC Form Styles','mm-events-calendar'); ?></h1>
+      <form method="post" action="options.php">
+        <?php settings_fields('mmec_form_styles_group'); ?>
+        <table class="form-table">
+          <tr><th><label for="max_width">Form Max Width</label></th>
+              <td><input id="max_width" name="mmec_form_styles[max_width]" class="regular-text" value="<?php echo esc_attr($o['max_width']); ?>"> <code>e.g. 640px</code></td></tr>
+          <tr><th><label for="border_radius">Border Radius</label></th>
+              <td><input id="border_radius" name="mmec_form_styles[border_radius]" class="regular-text" value="<?php echo esc_attr($o['border_radius']); ?>"></td></tr>
+          <tr><th><label for="label_color">Label Color</label></th>
+              <td><input id="label_color" name="mmec_form_styles[label_color]" class="regular-text" value="<?php echo esc_attr($o['label_color']); ?>"></td></tr>
+          <tr><th><label for="input_border">Input Border Color</label></th>
+              <td><input id="input_border" name="mmec_form_styles[input_border]" class="regular-text" value="<?php echo esc_attr($o['input_border']); ?>"></td></tr>
+          <tr><th><label for="button_bg">Button Background</label></th>
+              <td><input id="button_bg" name="mmec_form_styles[button_bg]" class="regular-text" value="<?php echo esc_attr($o['button_bg']); ?>"></td></tr>
+          <tr><th><label for="button_text">Button Text</label></th>
+              <td><input id="button_text" name="mmec_form_styles[button_text]" class="regular-text" value="<?php echo esc_attr($o['button_text']); ?>"></td></tr>
+          <tr><th><label for="notice_success_bg">Success Notice BG</label></th>
+              <td><input id="notice_success_bg" name="mmec_form_styles[notice_success_bg]" class="regular-text" value="<?php echo esc_attr($o['notice_success_bg']); ?>"></td></tr>
+          <tr><th><label for="notice_error_bg">Error Notice BG</label></th>
+              <td><input id="notice_error_bg" name="mmec_form_styles[notice_error_bg]" class="regular-text" value="<?php echo esc_attr($o['notice_error_bg']); ?>"></td></tr>
+        </table>
+        <?php submit_button(__('Save Styles','mm-events-calendar')); ?>
+      </form>
+    </div>
+    <?php
+}
+
+add_action('wp_enqueue_scripts', function () {
+    $o = mmec_get_options();
+    $css = "
+    .mmec-form{max-width:{$o['max_width']};margin:20px 0;padding:40px;border:1px solid {$o['input_border']};border-radius:{$o['border_radius']};background:#fff}
+    .mmec-form .mmec-row{margin-bottom:12px}
+    .mmec-form label{display:block;font-weight:600;margin-bottom:6px;color:{$o['label_color']}}
+    .mmec-form input[type='text'],
+    .mmec-form input[type='datetime-local'],
+    .mmec-form textarea{width:100%;padding:10px;border:1px solid {$o['input_border']};border-radius:6px;background:#fff}
+    .mmec-form .mmec-actions{margin-top:12px}
+    .mmec-form button{padding:10px 14px;border:0;border-radius:6px;cursor:pointer;background:{$o['button_bg']};color:{$o['button_text']}}
+    .mmec-alert{margin:12px 0;padding:12px;border-radius:6px}
+    .mmec-alert--success{background:{$o['notice_success_bg']}}
+    .mmec-alert--error{background:{$o['notice_error_bg']}}
+    ";
+    wp_register_style('mmec-inline', false);
+    wp_enqueue_style('mmec-inline');
+    wp_add_inline_style('mmec-inline', $css);
+});
 
 add_action('plugins_loaded', function() {
     //to be continued
